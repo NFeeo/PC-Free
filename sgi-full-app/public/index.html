@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Game Idler Pro</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0b0e14;
+            --panel-bg: #131822;
+            --panel-border: #20293a;
+            --accent-blue: #0088ff;
+            --accent-glow: rgba(0, 136, 255, 0.4);
+            --text-main: #f1f5f9;
+            --text-muted: #64748b;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
+
+        /* FULLSCREEN BACKGROUND GLOW */
+        .bg-glow { position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, var(--accent-glow) 0%, rgba(0,0,0,0) 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0; opacity: 0.5; }
+
+        /* AUTH CARD */
+        #authWrapper { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; z-index: 10; backdrop-filter: blur(10px); }
+        .auth-card { background: rgba(19, 24, 34, 0.85); border: 1px solid var(--panel-border); border-radius: 16px; padding: 40px; width: 420px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); position: relative; overflow: hidden; }
+        .auth-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent-blue), transparent); }
+        
+        .brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 30px; }
+        .brand-icon { width: 42px; height: 42px; background: linear-gradient(135deg, #0088ff, #0044ff); border-radius: 10px; display: flex; justify-content: center; align-items: center; font-weight: 800; font-size: 22px; color: #fff; box-shadow: 0 4px 15px var(--accent-glow); }
+        .brand-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+        .form-group input { width: 100%; padding: 14px 16px; background: #0f131c; border: 1px solid var(--panel-border); border-radius: 8px; color: #fff; font-size: 14px; outline: none; transition: all 0.2s; }
+        .form-group input:focus { border-color: var(--accent-blue); box-shadow: 0 0 12px var(--accent-glow); }
+
+        .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #0088ff, #0055ff); border: none; border-radius: 8px; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px var(--accent-glow); margin-top: 10px; }
+        .btn-submit:hover { opacity: 0.95; transform: translateY(-1px); }
+
+        .status-box { padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 20px; text-align: center; display: none; }
+        .status-box.error { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #f87171; }
+        .status-box.info { background: rgba(0, 136, 255, 0.15); border: 1px solid var(--accent-blue); color: #60a5fa; }
+
+        /* DASHBOARD LAYOUT */
+        #dashboardApp { display: none; width: 100vw; height: 100vh; z-index: 5; }
+        .sidebar { width: 260px; background: var(--panel-bg); border-right: 1px solid var(--panel-border); display: flex; flex-direction: column; }
+        .sidebar-brand { padding: 25px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--panel-border); }
+        .menu-list { padding: 20px 12px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+        .menu-btn { padding: 12px 16px; border-radius: 8px; color: var(--text-muted); font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s; }
+        .menu-btn:hover, .menu-btn.active { background: #1a2232; color: var(--text-main); }
+        .menu-btn.active { border-left: 3px solid var(--accent-blue); }
+
+        .main-viewport { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-dark); }
+        .header-bar { height: 70px; border-bottom: 1px solid var(--panel-border); display: flex; align-items: center; justify-content: space-between; padding: 0 35px; background: var(--panel-bg); }
+        .header-title { font-size: 20px; font-weight: 700; }
+        .header-actions { display: flex; align-items: center; gap: 15px; }
+
+        .btn-stop { background: var(--danger); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+        .btn-stop:hover { opacity: 0.9; }
+
+        .content-area { flex: 1; padding: 35px; overflow-y: auto; }
+        .controls-row { display: flex; gap: 15px; margin-bottom: 30px; }
+        .controls-row input { flex: 1; padding: 12px 16px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 8px; color: #fff; outline: none; }
+        .btn-add { background: var(--accent-blue); color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 20px; }
+        .game-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 12px; overflow: hidden; position: relative; transition: all 0.2s; }
+        .game-card:hover { transform: translateY(-4px); border-color: var(--accent-blue); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
+        .game-img { width: 100%; height: 110px; object-fit: cover; background: #1a2232; }
+        .game-details { padding: 14px; }
+        .game-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .game-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: var(--success); padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: monospace; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="bg-glow"></div>
+
+    <!-- AUTH WRAPPER -->
+    <div id="authWrapper">
+        <div class="auth-card">
+            <div class="brand">
+                <div class="brand-icon">S</div>
+                <div class="brand-title">Steam Game Idler</div>
+            </div>
+
+            <div id="statusBox" class="status-box"></div>
+
+            <form id="authForm">
+                <div id="stepCredentials">
+                    <div class="form-group">
+                        <label>Steam Kullanıcı Adı</label>
+                        <input type="text" id="usernameInput" required placeholder="Steam kullanıcı adınız">
+                    </div>
+                    <div class="form-group">
+                        <label>Steam Şifresi</label>
+                        <input type="password" id="passwordInput" required placeholder="••••••••••••">
+                    </div>
+                </div>
+
+                <div id="stepGuard" class="hidden">
+                    <div class="form-group">
+                        <label>Steam Guard / 2FA Kodu</label>
+                        <input type="text" id="guardInput" placeholder="Örn: AB1CD">
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-submit">Steam ile Giriş Yap</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboardApp">
+        <div class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon" style="width:32px;height:32px;font-size:16px;">S</div>
+                <span style="font-weight:700;font-size:16px;">Steam Idler Pro</span>
+            </div>
+            <div class="menu-list">
+                <div class="menu-btn">🎮 Tüm Oyunlar</div>
+                <div class="menu-btn active">⚡ Boşta Çalıştırma (Idling)</div>
+                <div class="menu-btn">⭐ Favoriler</div>
+                <div class="menu-btn">🃏 Kart Düşürücü</div>
+                <div class="menu-btn">🏆 Başarım Açıcı</div>
+            </div>
+        </div>
+
+        <div class="main-viewport">
+            <div class="header-bar">
+                <div class="header-title">Boşta Çalıştırma Paneli</div>
+                <div class="header-actions">
+                    <span id="userBadge" style="font-size:13px; color:var(--text-muted);">Bağlandı</span>
+                    <button class="btn-stop" onclick="stopIdling()">Hepsini Durdur</button>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="controls-row">
+                    <input type="text" id="customAppIdInput" placeholder="Özel Oyun AppID ekle (Örn: Stumble Guys için 552700, CS2 için 730)">
+                    <button class="btn-add" onclick="addCustomGame()">Ekipte Çalıştır</button>
+                </div>
+
+                <div class="cards-grid" id="cardsGrid">
+                    <!-- Oyun Kartları -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let activeGames = [];
+
+        const authForm = document.getElementById('authForm');
+        const statusBox = document.getElementById('statusBox');
+        const submitBtn = document.getElementById('submitBtn');
+        let isGuardStep = false;
+
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            showStatus('Steam sunucularına bağlanılıyor...', 'info');
+
+            if (!isGuardStep) {
+                const username = document.getElementById('usernameInput').value.trim();
+                const password = document.getElementById('passwordInput').value;
+                socket.emit('login', { username, password });
+            } else {
+                const code = document.getElementById('guardInput').value.trim();
+                socket.emit('submit_guard', code);
+            }
+        });
+
+        socket.on('needs_guard', (msg) => {
+            isGuardStep = true;
+            document.getElementById('stepCredentials').classList.add('hidden');
+            document.getElementById('stepGuard').classList.remove('hidden');
+            submitBtn.innerText = 'Guard Kodunu Doğrula';
+            showStatus(msg, 'info');
+        });
+
+        socket.on('login_error', (err) => {
+            showStatus(err, 'error');
+        });
+
+        socket.on('login_status', (msg) => {
+            showStatus(msg, 'info');
+        });
+
+        socket.on('login_success', (data) => {
+            document.getElementById('authWrapper').style.display = 'none';
+            document.getElementById('dashboardApp').style.display = 'flex';
+            document.getElementById('userBadge').innerText = `Kullanıcı: ${data.username} (${data.gamesCount} Oyun)`;
+            
+            renderGames(data.idlingGames);
+        });
+
+        socket.on('idling_stopped', () => {
+            document.getElementById('cardsGrid').innerHTML = '<div style="color:var(--text-muted); grid-column:span 4; text-align:center; padding:50px;">Tüm oyunlarda saat kasma durduruldu.</div>';
+        });
+
+        socket.on('idling_updated', (games) => {
+            renderGames(games);
+        });
+
+        function renderGames(gameIds) {
+            activeGames = gameIds;
+            const grid = document.getElementById('cardsGrid');
+            grid.innerHTML = '';
+
+            gameIds.forEach(id => {
+                const card = document.createElement('div');
+                card.className = 'game-card';
+                card.innerHTML = `
+                    <img class="game-img" src="https://cdn.akamai.steamstatic.com/steam/apps/${id}/header.jpg" onerror="this.src='https://placehold.co/460x215/131822/0088ff?text=App+${id}'">
+                    <div class="game-details">
+                        <div class="game-title">App ID: ${id}</div>
+                        <div class="game-badge">
+                            <span>●</span>
+                            <span>00:00:05 Kasılıyor</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function stopIdling() {
+            socket.emit('stop_idling');
+        }
+
+        function addCustomGame() {
+            const val = document.getElementById('customAppIdInput').value.trim();
+            if (val) {
+                const newId = parseInt(val);
+                if (!isNaN(newId) && !activeGames.includes(newId)) {
+                    activeGames.unshift(newId);
+                    socket.emit('start_idling_custom', activeGames.slice(0, 32));
+                    document.getElementById('customAppIdInput').value = '';
+                }
+            }
+        }
+
+        function showStatus(text, type) {
+            statusBox.style.display = 'block';
+            statusBox.className = `status-box ${type}`;
+            statusBox.innerText = text;
+        }
+    </script>
+</body>
+</html>

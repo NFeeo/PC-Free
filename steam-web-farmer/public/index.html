@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Game Idler</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #0f141c; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        
+        /* LOGIN EKRANI STİLLERİ */
+        #loginContainer { width: 400px; background: #171a21; border: 1px solid #2a475e; border-radius: 12px; padding: 35px; box-shadow: 0 12px 36px rgba(0,0,0,0.7); }
+        .logo-area { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 25px; }
+        .logo-icon { width: 36px; height: 36px; background: #66c0f4; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #171a21; font-size: 20px; }
+        .logo-text { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+        
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; color: #8f98a0; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; }
+        input { width: 100%; padding: 12px 15px; background: #1b2838; border: 1px solid #2a475e; border-radius: 6px; color: #fff; font-size: 15px; outline: none; transition: 0.2s; }
+        input:focus { border-color: #66c0f4; box-shadow: 0 0 8px rgba(102, 192, 244, 0.3); }
+        
+        .btn-primary { width: 100%; padding: 13px; background: linear-gradient(135deg, #47bfff 0%, #1a44c2 100%); border: none; border-radius: 6px; color: white; font-weight: bold; font-size: 15px; cursor: pointer; transition: 0.2s; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        
+        .error-msg { background: rgba(244, 67, 54, 0.15); border: 1px solid #f44336; color: #f44336; padding: 10px; border-radius: 6px; font-size: 13px; margin-bottom: 15px; text-align: center; display: none; }
+        
+        /* DASHBOARD (SGI) EKRANI STİLLERİ */
+        #dashboardContainer { display: none; width: 100vw; height: 100vh; background: #171a21; display: flex; }
+        .sidebar { width: 240px; background: #12151b; border-right: 1px solid #20242d; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #20242d; }
+        .sidebar-menu { padding: 15px 10px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+        .menu-item { padding: 12px 15px; border-radius: 6px; color: #8f98a0; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 12px; font-weight: 500; text-decoration: none; transition: 0.2s; }
+        .menu-item:hover, .menu-item.active { background: #1b2838; color: #fff; }
+        
+        .main-content { flex: 1; display: flex; flex-direction: column; background: #171a21; overflow: hidden; }
+        .topbar { height: 60px; border-bottom: 1px solid #2a475e; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: #1b2838; }
+        .topbar-title { font-size: 18px; font-weight: 600; }
+        .topbar-actions { display: flex; gap: 15px; align-items: center; }
+        
+        .btn-danger { background: #d94141; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; transition: 0.2s; }
+        .btn-danger:hover { background: #f44336; }
+        
+        .content-body { flex: 1; padding: 30px; overflow-y: auto; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .section-title { font-size: 20px; font-weight: 700; color: #fff; }
+        
+        .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
+        .game-card { background: #1b2838; border-radius: 8px; overflow: hidden; border: 1px solid #2a475e; transition: 0.2s; position: relative; }
+        .game-card:hover { transform: translateY(-3px); border-color: #66c0f4; box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
+        .game-banner { width: 100%; height: 100px; background: #2a475e; object-fit: cover; }
+        .game-info { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+        .game-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .game-status-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8f98a0; }
+        .playtime-badge { background: rgba(102, 192, 244, 0.15); color: #66c0f4; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-family: monospace; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- GİRİŞ FORMU -->
+    <div id="loginContainer">
+        <div class="logo-area">
+            <div class="logo-icon">S</div>
+            <div class="logo-text">Steam Game Idler</div>
+        </div>
+        
+        <div id="errorBox" class="error-msg"></div>
+
+        <form id="authForm">
+            <div id="step1Inputs">
+                <div class="form-group">
+                    <label>Steam Kullanıcı Adı</label>
+                    <input type="text" id="username" required placeholder="Kullanıcı adınızı girin">
+                </div>
+                <div class="form-group">
+                    <label>Steam Şifresi</label>
+                    <input type="password" id="password" required placeholder="••••••••••••">
+                </div>
+            </div>
+
+            <div id="step2Inputs" class="hidden">
+                <div class="form-group">
+                    <label>Steam Guard / 2FA Kodu</label>
+                    <input type="text" id="guardCode" placeholder="Örn: AB1CD">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary" id="submitBtn">Giriş Yap</button>
+        </form>
+    </div>
+
+    <!-- DASHBOARD (SGI ARAYÜZÜ) -->
+    <div id="dashboardContainer" class="hidden" style="display:none;">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon" style="width:28px;height:28px;font-size:16px;">S</div>
+                <span style="font-weight:700;font-size:15px;">Steam Game Idler</span>
+            </div>
+            <div class="sidebar-menu">
+                <div class="menu-item">🎮 Oyunlar</div>
+                <div class="menu-item active">⚡ Boşta Çalıştırma</div>
+                <div class="menu-item">⭐ Favoriler</div>
+                <div class="menu-item">🃏 Kart Kasma</div>
+                <div class="menu-item">🏆 Başarım Açıcı</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="topbar">
+                <div class="topbar-title">Boşta Çalıştırma (Idling)</div>
+                <div class="topbar-actions">
+                    <span id="activeCountBadge" style="font-size: 13px; color: #8f98a0;">Aktif Kasılıyor...</span>
+                    <button class="btn-danger" onclick="stopAllGames()">Hepsini Durdur</button>
+                </div>
+            </div>
+            <div class="content-body">
+                <div class="section-header">
+                    <div class="section-title">Otomatik Kasılma Listesi</div>
+                </div>
+                <div class="games-grid" id="gamesGrid">
+                    <!-- Dinamik oyun kartları buraya gelecek -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUsername = '';
+        let isGuardStep = false;
+
+        const authForm = document.getElementById('authForm');
+        const errorBox = document.getElementById('errorBox');
+        const submitBtn = document.getElementById('submitBtn');
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorBox.style.display = 'none';
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const guardCode = document.getElementById('guardCode').value.trim();
+
+            currentUsername = username;
+            submitBtn.innerText = 'Bağlanılıyor...';
+            submitBtn.disabled = true;
+
+            let endpoint = '/api/login';
+            let payload = { username, password };
+
+            if (isGuardStep) {
+                endpoint = '/api/verify-guard';
+                payload = { username, guardCode };
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    // Giriş başarılı, SGI Dashboard'a geç
+                    document.getElementById('loginContainer').style.display = 'none';
+                    const dash = document.getElementById('dashboardContainer');
+                    dash.classList.remove('hidden');
+                    dash.style.display = 'flex';
+                    loadDashboardGames(username);
+                } else if (data.needsGuard) {
+                    // 2FA / Steam Guard kodu istiyor
+                    isGuardStep = true;
+                    document.getElementById('step1Inputs').classList.add('hidden');
+                    document.getElementById('step2Inputs').classList.remove('hidden');
+                    submitBtn.innerText = 'Kodu Doğrula';
+                    submitBtn.disabled = false;
+                } else {
+                    errorBox.innerText = data.message || 'Bir hata oluştu!';
+                    errorBox.style.display = 'block';
+                    submitBtn.innerText = isGuardStep ? 'Kodu Doğrula' : 'Giriş Yap';
+                    submitBtn.disabled = false;
+                }
+            } catch (err) {
+                errorBox.innerText = 'Sunucu bağlantı hatası!';
+                errorBox.style.display = 'block';
+                submitBtn.disabled = false;
+            }
+        });
+
+        async function loadDashboardGames(username) {
+            try {
+                const res = await fetch(`/api/games/${username}`);
+                const data = await res.json();
+                if (data.success) {
+                    const grid = document.getElementById('gamesGrid');
+                    grid.innerHTML = '';
+                    
+                    const games = data.games.slice(0, 32); // Max 32 oyun
+                    document.getElementById('activeCountBadge').innerText = `${games.length} games idling`;
+
+                    games.forEach(appId => {
+                        const card = document.createElement('div');
+                        card.className = 'game-card';
+                        card.innerHTML = `
+                            <img class="game-banner" src="https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg" onerror="this.src='https://placehold.co/460x215/1b2838/66c0f4?text=App+${appId}'">
+                            <div class="game-info">
+                                <div class="game-name">App ID: ${appId}</div>
+                                <div class="game-status-row">
+                                    <span class="playtime-badge">00:05</span>
+                                    <span style="color: #4caf50; font-size: 11px;">● Aktif</span>
+                                </div>
+                            </div>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function stopAllGames() {
+            if (!currentUsername) return;
+            try {
+                await fetch('/api/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUsername, action: 'stopAll' })
+                });
+                document.getElementById('gamesGrid').innerHTML = '<div style="color: #8f98a0; grid-column: span 4; text-align:center; padding: 40px;">Tüm oyunlarda saat kasma durduruldu.</div>';
+                document.getElementById('activeCountBadge').innerText = '0 games idling';
+            } catch (e) {
+                alert('Durdurulamadı!');
+            }
+        }
+    </script>
+</body>
+</html>
