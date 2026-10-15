@@ -11,21 +11,46 @@ const io = new Server(server, { cors: { origin: "*" } });
 const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Global oturum havuzu (Sayfa yenilense bile botlar arkaplanda 7/24 çalışmaya devam eder)
+const sessions = {};
+
 io.on('connection', (socket) => {
-    let client = null;
-    let username = '';
+
+    // Daha önce giriş yapmış bir kullanıcı varsa otomatik bağla
+    socket.on('restore_session', (username) => {
+        if (sessions[username] && sessions[username].loggedIn) {
+            socket.username = username;
+            socket.emit('login_success', {
+                username: username,
+                gamesCount: sessions[username].games.length,
+                idlingGames: sessions[username].idlingGames
+            });
+        }
+    });
 
     socket.on('login', (data) => {
-        username = data.username;
+        const username = data.username;
         const password = data.password;
+        socket.username = username;
 
         if (!username || !password) {
             return socket.emit('login_error', 'Kullanıcı adı ve şifre gereklidir.');
         }
 
-        if (client) { try { client.logOff(); } catch(e){} }
+        // Eğer bu kullanıcı zaten aktifse mevcut istemciyi kullan
+        if (sessions[username] && sessions[username].client) {
+            sessions[username].loggedIn = true;
+            socket.emit('login_success', {
+                username: username,
+                gamesCount: sessions[username].games.length,
+                idlingGames: sessions[username].idlingGames
+            });
+            return;
+        }
 
-        client = new SteamUser();
+        const client = new SteamUser();
+        sessions[username] = { client, loggedIn: false, games: [], idlingGames: [] };
+
         client.logOn({ accountName: username, password: password });
 
         client.on('loggedOn', () => {
@@ -42,13 +67,17 @@ io.on('connection', (socket) => {
                 const gamesToIdle = myGames.slice(0, 32);
                 if (gamesToIdle.length > 0) client.gamesPlayed(gamesToIdle);
 
+                sessions[username].loggedIn = true;
+                sessions[username].games = myGames;
+                sessions[username].idlingGames = gamesToIdle;
+
                 socket.emit('login_success', {
                     username: username,
                     gamesCount: myGames.length,
                     idlingGames: gamesToIdle
                 });
             } catch (err) {
-                socket.emit('login_error', 'Kütüphane taranırken hata oluştu: ' + err.message);
+                socket.emit('login_error', 'Kütüphane hatası: ' + err.message);
             }
         });
 
@@ -71,15 +100,17 @@ io.on('connection', (socket) => {
     });
 
     socket.on('stop_idling', () => {
-        if (client) {
-            client.gamesPlayed([]);
+        if (socket.username && sessions[socket.username]) {
+            sessions[socket.username].client.gamesPlayed([]);
+            sessions[socket.username].idlingGames = [];
             socket.emit('idling_stopped');
         }
     });
 
     socket.on('start_idling_custom', (gameIds) => {
-        if (client && Array.isArray(gameIds)) {
-            client.gamesPlayed(gameIds);
+        if (socket.username && sessions[socket.username] && Array.isArray(gameIds)) {
+            sessions[socket.username].client.gamesPlayed(gameIds);
+            sessions[socket.username].idlingGames = gameIds;
             socket.emit('idling_updated', gameIds);
         }
     });

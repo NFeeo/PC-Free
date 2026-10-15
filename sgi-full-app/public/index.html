@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Steam Game Idler — Your Steam library on autopilot</title>
-    <!-- Inter Font & FontAwesome Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -51,7 +50,6 @@
     <div class="glow-effect w-[600px] h-[600px] bg-purple-600/10 -bottom-60 -right-40"></div>
 
     <div class="relative z-10 w-full h-full flex flex-col bg-brand-bg text-slate-200">
-        <!-- WINDOW TOPBAR -->
         <header class="h-12 bg-brand-panel/90 border-b border-brand-border/60 flex items-center justify-between px-4 select-none">
             <div class="flex items-center gap-3">
                 <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-brand-600 to-brand-500 flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/30 text-sm">
@@ -79,7 +77,6 @@
             </div>
         </header>
 
-        <!-- MAIN LAYOUT -->
         <div class="flex-1 flex overflow-hidden">
             <aside class="w-64 bg-brand-panel/60 border-r border-brand-border/60 flex flex-col justify-between p-3 select-none">
                 <div class="space-y-6">
@@ -149,7 +146,7 @@
                             </div>
                             <div>
                                 <h3 class="text-xs font-bold text-white">Özel Oyun Ekleyin</h3>
-                                <p class="text-[11px] text-slate-400">Kütüphanenizde olmayan veya özel Steam AppID girin (Örn: Stumble Guys için 552700).</p>
+                                <p class="text-[11px] text-slate-400">Özel Steam AppID ekleyin (Örn: Stumble Guys için 552700).</p>
                             </div>
                         </div>
 
@@ -221,13 +218,18 @@
         </div>
     </div>
 
-    <!-- SOCKET.IO & APP LOGIC -->
     <script>
         const socket = io();
         let gamesList = [];
-        let timerInterval = null;
-        let secondsElapsed = 5;
         let isGuardStep = false;
+
+        // Sayfa açıldığında tarayıcıda kayıtlı hesap var mı kontrol et ve geri yükle
+        window.onload = function() {
+            const savedUser = localStorage.getItem('sgi_saved_user');
+            if (savedUser) {
+                socket.emit('restore_session', savedUser);
+            }
+        };
 
         function openAuthModal() { document.getElementById('authModal').classList.remove('hidden'); }
         function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
@@ -245,6 +247,7 @@
             if (!isGuardStep) {
                 const username = document.getElementById('usernameInput').value.trim();
                 const password = document.getElementById('passwordInput').value;
+                localStorage.setItem('sgi_saved_user', username); // Kullanıcı adını kaydet
                 socket.emit('login', { username, password });
             } else {
                 const code = document.getElementById('guardInput').value.trim();
@@ -273,15 +276,11 @@
 
         socket.on('login_success', (data) => {
             document.getElementById('submitAuthBtn').disabled = false;
-            showAuthStatus('Giriş başarılı! Kütüphane yükleniyor...', 'success');
-            
-            setTimeout(() => {
-                closeAuthModal();
-                document.getElementById('userNameDisplay').innerText = data.username;
-                document.getElementById('userBadge').classList.remove('hidden');
-                document.getElementById('userBadge').classList.add('flex');
-                document.getElementById('authModalBtnText').innerText = data.username;
-            }, 800);
+            closeAuthModal();
+            document.getElementById('userNameDisplay').innerText = data.username;
+            document.getElementById('userBadge').classList.remove('hidden');
+            document.getElementById('userBadge').classList.add('flex');
+            document.getElementById('authModalBtnText').innerText = data.username;
 
             gamesList = data.idlingGames.map(id => ({
                 id: id,
@@ -291,7 +290,6 @@
             }));
 
             renderGamesGrid(gamesList);
-            startLiveTimer();
         });
 
         socket.on('idling_stopped', () => {
@@ -393,13 +391,6 @@
             const query = document.getElementById('searchInput').value.toLowerCase();
             const filtered = gamesList.filter(g => g.id.toString().includes(query));
             renderGamesGrid(filtered);
-        }
-
-        function startLiveTimer() {
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                secondsElapsed++;
-            }, 1000);
         }
 
         function showAuthStatus(text, type) {
