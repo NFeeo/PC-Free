@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const SteamUser = require('steam-user');
 
@@ -8,7 +9,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 io.on('connection', (socket) => {
     let client = null;
@@ -47,7 +48,7 @@ io.on('connection', (socket) => {
                     idlingGames: gamesToIdle
                 });
             } catch (err) {
-                socket.emit('login_error', 'Kütüphane hatası: ' + err.message);
+                socket.emit('login_error', 'Kütüphane taranırken hata oluştu: ' + err.message);
             }
         });
 
@@ -85,5 +86,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Steam Game Idler Pro ${PORT} portunda çalışıyor.`);
+    console.log(`Steam Game Idler PRO ${PORT} portunda çalışıyor.`);
 });
